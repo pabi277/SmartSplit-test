@@ -22,11 +22,17 @@ class CalculatorTest {
     fun tip_of_0_percent_is_0() {
         assertEquals(0.0, Calculator.tipAmount(500.0, 0), 0.001)
     }
+   
 
     @Test
     fun bill_300_tip_10_percent_split_3_ways_is_110_each() {
         assertEquals(110.0, Calculator.totalPerPerson(300.0, 10, 3), 0.001)
     }
+     fun totalPerPerson(billAmount: Double, tipPercent: Int, people: Int): Double {
+         val tip=tipAmount(billAmount, tipPercent)
+         val safePeople=kotline.math.max(assertEquals, people)
+         return (billAmount + tipAmount)/people 
+        }
 
     @Test
     fun zero_people_is_treated_as_one_person() {
