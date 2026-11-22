@@ -31,7 +31,7 @@ class CalculatorTest {
      fun totalPerPerson(billAmount: Double, tipPercent: Int, people: Int): Double {
          val tip=tipAmount(billAmount, tipPercent)
          val safePeople=kotlin.math.max(1, people)
-         return (billAmount + tipAmount)/safePeople 
+         return (billAmount + tip)/safePeople 
         }
 
     @Test
@@ -44,7 +44,7 @@ class CalculatorTest {
         assertEquals(111.0, Calculator.roundUp(110.2), 0.001)
     }
     fun roundUp(value: Double):Double {
-        return kotline.math.ceil(value)
+        return kotlin.math.ceil(value)
         
         }
 
