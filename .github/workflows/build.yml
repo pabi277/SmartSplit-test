@@ -24,20 +24,152 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      # "tee" saves the entire build output into build.log so the two report
+      # steps below can translate raw errors into readable explanations.
       - name: Build APK and run the tests
-        run: gradle assembleDebug testDebugUnitTest --no-daemon
+        shell: bash
+        run: gradle assembleDebug testDebugUnitTest --no-daemon 2>&1 | tee build.log
+
+      # Reads the raw JUnit XML and writes a clean report on the run page.
+      - name: 🧪 Grader report (appears on the run Summary page)
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, os, html
+          import xml.etree.ElementTree as ET
+
+          files = sorted(glob.glob("app/build/test-results/testDebugUnitTest/*.xml"))
+          out = ["## 🧪 Grader report", ""]
+          passed, failed, errored = [], [], []
+
+          for f in files:
+              try:
+                  root = ET.parse(f).getroot()
+              except Exception as exc:
+                  out.append(f"_Could not read {f}: {exc}_")
+                  continue
+              for tc in root.iter("testcase"):
+                  name = tc.get("name", "?")
+                  fail = tc.find("failure")
+                  err = tc.find("error")
+                  node = fail if fail is not None else err
+                  if node is None:
+                      passed.append(name)
+                  elif fail is not None:
+                      failed.append((name, node))
+                  else:
+                      errored.append((name, node))
+
+          if not files:
+              out.append("_No test results found — the build failed before tests could run._")
+              out.append("_Read the 🐞 Build errors section below._")
+          else:
+              out.insert(2, f"**{len(passed)} passed · {len(failed)} failed · {len(errored)} errors**")
+              out.insert(3, "")
+
+              for name, node in failed + errored:
+                  out.append(f"### ❌ {name}")
+                  typ = node.get("type") or ""
+                  msg = html.unescape(node.get("message") or "").strip()
+                  if typ:
+                      out.append(f"- **Error type:** `{typ}`")
+                  if msg:
+                      out.append("- **What went wrong:**")
+                      for ln in msg.splitlines()[:6]:
+                          out.append(f"  > {ln}")
+                  out.append("- 💡 In `expected:<X> but was:<Y>`: X is what the test wants, Y is what YOUR function returned.")
+                  out.append("")
+
+              if passed:
+                  out.append("### ✅ Passed")
+                  out.extend(f"- {name}" for name in passed)
+                  out.append("")
+
+              if not failed and not errored:
+                  out.append("🎉 **ALL TESTS GREEN — the APK artifact is unlocked. Install it!**")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(out) + "\n")
+          EOF
+
+      # If the build itself broke (Kotlin compile errors etc.), surface the
+      # exact file and line of every error instead of a wall of log text.
+      - name: 🐞 Build error report (appears on the run Summary page)
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import os
+          import re
+
+          try:
+              log = open("build.log", encoding="utf-8", errors="ignore").read()
+          except FileNotFoundError:
+              log = ""
+
+          lines = log.splitlines()
+          out = ["## 🐞 Build errors", ""]
+
+          kotlin_errors = [ln for ln in lines if ln.startswith("e: ") and "file://" in ln]
+
+          what = []
+          for i, ln in enumerate(lines):
+              if "What went wrong:" in ln:
+                  for nxt in lines[i + 1:]:
+                      if nxt.startswith("* Try:") or nxt.startswith("BUILD FAILED"):
+                          break
+                      if nxt.strip():
+                          what.append(nxt)
+                  break
+
+          if not log.strip():
+              out.append("_No build log captured — the failure happened before Gradle started._")
+          else:
+              if kotlin_errors:
+                  out.append(f"**Compile errors in your Kotlin code: {len(kotlin_errors)}**")
+                  out.append("")
+                  for ln in kotlin_errors[:10]:
+                      body = ln[3:]
+                      m = re.search(r"file://(\S+\.kt):(\d+):(\d+)\s*(.*)", body)
+                      if m:
+                          path, line_no, col, msg = m.groups()
+                          path = re.sub(r".*?/work/[^/]+/[^/]+/", "", path)
+                          out.append(f"- `{path}:{line_no}:{col}` — {msg}")
+                      else:
+                          out.append(f"- `{body}`")
+                  out.append("")
+                  out.append("💡 Open that file at that line in CodeC — the compiler is pointing at broken code.")
+              if what:
+                  out.append("**Gradle summary:**")
+                  out.append("```")
+                  out.extend(what[:8])
+                  out.append("```")
+              if not kotlin_errors and any("failing tests" in w.lower() for w in what):
+                  out.append("")
+                  out.append("💡 No compile errors — this red run is from **failing tests**. See the 🧪 Grader report above.")
+
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write("\n".join(out) + "\n")
+          EOF
 
       - name: Upload APK (install this on your phone)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SplitSmart-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      # Even when tests FAIL, keep the report so you can read what went wrong.
-      - name: Upload test results
+      - name: Upload raw test results (open the XML in CodeC if curious)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
           path: app/build/test-results/
+          if-no-files-found: ignore
+
+      - name: Upload full build log (only on red runs)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
           if-no-files-found: ignore
