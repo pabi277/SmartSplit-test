@@ -14,6 +14,9 @@ class CalculatorTest {
     fun tip_of_10_percent_on_500_is_50() {
         assertEquals(50.0, Calculator.tipAmount(500.0, 10), 0.001)
     }
+    fun tipAmount(billAmount: Double, tipPercent: Int): Double {
+    return billAmount * tipPercent / 100
+    }
 
     @Test
     fun tip_of_0_percent_is_0() {
