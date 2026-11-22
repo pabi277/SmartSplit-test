@@ -30,7 +30,7 @@ class CalculatorTest {
     }
      fun totalPerPerson(billAmount: Double, tipPercent: Int, people: Int): Double {
          val tip=tipAmount(billAmount, tipPercent)
-         val safePeople=kotline.math.max(assertEquals, people)
+         val safePeople=kotline.math.max(totalPerPerson, people)
          return (billAmount + tipAmount)/people 
         }
 
