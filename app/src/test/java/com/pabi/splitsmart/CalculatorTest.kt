@@ -43,6 +43,10 @@ class CalculatorTest {
     fun round_up_110_point_2_is_111() {
         assertEquals(111.0, Calculator.roundUp(110.2), 0.001)
     }
+    fun roundUp(value: Double):Double {
+        return kotline.math.ceil(value)
+        
+        }
 
     @Test
     fun round_up_whole_number_stays_the_same() {
